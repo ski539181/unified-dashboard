@@ -1,203 +1,253 @@
-// App.tsx — Hermes AI OS Dashboard
-import { useState, useEffect } from 'react';
-import { useWebSocket } from './useWebSocket';
-import { fetchTasks, fetchHealth, createTask } from './api';
-import type { Task, HealthStatus } from './api';
-import './App.css';
+import { useState, useEffect } from "react";
+import { Sidebar, MobileMenu, TopBar, MainContent } from "./components/layout";
+import { StatCard, Card, CardHeader, CardTitle, CardContent, Badge, StatusBadge, StatCardSkeleton, KanbanSkeleton, EventSkeleton } from "./components/ui";
+import { fetchHealth, fetchTasks, fetchAgents, fetchEvents, fetchSystemHealth, fetchNotifications, type HealthStatus, type Task, type Agent, type Event, type SystemHealth, type Notification } from "./api";
 
 function App() {
-  const { connected, events, clearEvents } = useWebSocket();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [currentRoute, setCurrentRoute] = useState("overview");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-
-  // Load data
-  const loadData = async () => {
-    try {
-      const [tasksData, healthData] = await Promise.all([
-        fetchTasks(),
-        fetchHealth(),
-      ]);
-      setTasks(tasksData);
-      setHealth(healthData);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [healthData, tasksData, agentsData, eventsData, sysHealth, notifs] = await Promise.all([
+          fetchHealth().catch(() => null),
+          fetchTasks().catch(() => []),
+          fetchAgents().catch(() => []),
+          fetchEvents(20).catch(() => []),
+          fetchSystemHealth().catch(() => null),
+          fetchNotifications().catch(() => []),
+        ]);
+        setHealth(healthData);
+        setTasks(tasksData);
+        setAgents(agentsData);
+        setEvents(eventsData);
+        setSystemHealth(sysHealth);
+        setNotifications(notifs);
+      } catch (err) {
+        console.error("Failed to load data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
     loadData();
-    const interval = setInterval(loadData, 5000); // Refresh every 5s
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Handle new task
-  const handleCreateTask = async () => {
-    if (!newTaskTitle.trim()) return;
-    try {
-      await createTask(newTaskTitle);
-      setNewTaskTitle('');
-      loadData();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-
-  // Kanban columns
   const columns = {
-    queued: tasks.filter(t => t.status === 'queued'),
-    assigned: tasks.filter(t => t.status === 'assigned'),
-    running: tasks.filter(t => t.status === 'running'),
-    completed: tasks.filter(t => t.status === 'completed'),
-    failed: tasks.filter(t => t.status === 'failed' || t.status === 'dead_letter'),
+    queued: tasks.filter((t) => t.status === "queued"),
+    assigned: tasks.filter((t) => t.status === "assigned"),
+    running: tasks.filter((t) => t.status === "running"),
+    completed: tasks.filter((t) => t.status === "completed"),
+    failed: tasks.filter((t) => t.status === "failed"),
   };
-
-  // Healing events
-  const healingEvents = events.filter(e => e.type.startsWith('healing:'));
-
-  if (loading) {
-    return <div className="loading">Loading Hermes AI OS Dashboard...</div>;
-  }
 
   return (
-    <div className="app">
-      {/* Header */}
-      <header className="header">
-        <h1>🚀 Hermes AI OS Dashboard</h1>
-        <div className="status-bar">
-          <span className={`status-dot ${connected ? 'green' : 'red'}`} />
-          <span>{connected ? 'Connected' : 'Disconnected'}</span>
-          <span className="version">v{health?.version || '?'}</span>
-          <span className="persistence">{health?.persistence || '?'}</span>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[var(--bg-base)]">
+      <MobileMenu currentRoute={currentRoute} onNavigate={setCurrentRoute} />
+      <Sidebar currentRoute={currentRoute} onNavigate={setCurrentRoute} />
 
-      {error && <div className="error-banner">⚠️ {error}</div>}
+      <MainContent>
+        <TopBar title="Overview" subtitle="Real-time system status" />
 
-      {/* Overview Cards */}
-      <section className="overview">
-        <div className="card">
-          <h3>📋 Tasks</h3>
-          <div className="big-number">{tasks.length}</div>
-          <div className="sub">
-            {columns.queued.length} queued · {columns.running.length} running · {columns.completed.length} done
-          </div>
-        </div>
-        <div className="card">
-          <h3>🤖 Agents</h3>
-          <div className="big-number">{health?.modules.orchestrator.agents.total || 0}</div>
-          <div className="sub">
-            {health?.modules.orchestrator.agents.idle || 0} idle · {health?.modules.orchestrator.agents.working || 0} working · {health?.modules.orchestrator.agents.error || 0} error
-          </div>
-        </div>
-        <div className="card">
-          <h3>🧠 Memory</h3>
-          <div className="big-number">{health?.modules.memory.total || 0}</div>
-          <div className="sub">
-            {health?.modules.memory.working || 0} working · {health?.modules.memory.longterm || 0} longterm · {health?.modules.memory.vector || 0} vector
-          </div>
-        </div>
-        <div className="card">
-          <h3>🛡️ Self-Healer</h3>
-          <div className="big-number">{health?.modules.selfHealer.totalHealings || 0}</div>
-          <div className="sub">
-            {health?.modules.selfHealer.isRunning ? '✅ Running' : '⏸️ Stopped'} · {((health?.modules.selfHealer.successRate || 0) * 100).toFixed(0)}% success
-          </div>
-        </div>
-      </section>
-
-      {/* Create Task */}
-      <section className="create-task">
-        <input
-          type="text"
-          value={newTaskTitle}
-          onChange={e => setNewTaskTitle(e.target.value)}
-          placeholder="New task title..."
-          onKeyDown={e => e.key === 'Enter' && handleCreateTask()}
-        />
-        <button onClick={handleCreateTask}>+ Create Task</button>
-      </section>
-
-      {/* Kanban Board */}
-      <section className="kanban">
-        <h2>📋 Kanban Board</h2>
-        <div className="kanban-columns">
-          {(['queued', 'assigned', 'running', 'completed', 'failed'] as const).map(col => (
-            <div key={col} className={`kanban-col ${col}`}>
-              <h3>{col.toUpperCase()} ({columns[col].length})</h3>
-              {columns[col].map(task => (
-                <div key={task.id} className={`task-card ${task.status}`}>
-                  <div className="task-title">{task.title}</div>
-                  <div className="task-meta">
-                    <span className="priority">P{task.priority}</span>
-                    {task.assignedAgentId && <span className="agent">🤖 {task.assignedAgentId.slice(0, 8)}</span>}
-                  </div>
-                  {task.errorMessage && <div className="task-error">{task.errorMessage}</div>}
-                </div>
-              ))}
+        <div className="mt-6 space-y-6">
+          {/* Stat Cards */}
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => <StatCardSkeleton key={i} />)}
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Two-column layout: Healing + Events */}
-      <div className="two-col">
-        {/* Self-Healing Panel */}
-        <section className="healing-panel">
-          <h2>🛡️ Self-Healing Events</h2>
-          {healingEvents.length === 0 ? (
-            <div className="empty">No healing events yet</div>
           ) : (
-            <div className="event-list">
-              {healingEvents.slice(0, 20).map(event => (
-                <div key={event.id} className={`event-item ${event.type}`}>
-                  <span className="event-type">{event.type}</span>
-                  <span className="event-time">{new Date(event.timestamp).toLocaleTimeString()}</span>
-                  <span className="event-source">{event.source}</span>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <StatCard icon="📋" label="Tasks" value={tasks.length} subtitle={`${columns.queued.length} queued · ${columns.running.length} running · ${columns.completed.length} done`} />
+              <StatCard icon="🤖" label="Agents" value={agents.length} subtitle={`${agents.filter(a => a.status === 'idle').length} idle · ${agents.filter(a => a.status === 'working').length} working`} />
+              <StatCard icon="🧠" label="Memory" value={health?.modules.memory.total ?? 0} subtitle={`${health?.modules.memory.working ?? 0} working · ${health?.modules.memory.longterm ?? 0} long-term`} />
+              <StatCard icon="📈" label="Health" value={`${Math.round((health?.modules.improvement.avgHealth ?? 0) * 100)}%`} subtitle="System health score" />
+              <StatCard icon="🛡️" label="Self-Heal" value={health?.modules.selfHealer.totalHealings ?? 0} subtitle={health?.modules.selfHealer.isRunning ? "Running" : "Stopped"} />
             </div>
           )}
-        </section>
 
-        {/* Live Event Stream */}
-        <section className="event-stream">
-          <h2>📡 Live Events <button onClick={clearEvents}>Clear</button></h2>
-          <div className="event-list">
-            {events.slice(0, 30).map(event => (
-              <div key={event.id} className={`event-item ${event.type}`}>
-                <span className="event-type">{event.type}</span>
-                <span className="event-time">{new Date(event.timestamp).toLocaleTimeString()}</span>
-                <span className="event-source">{event.source}</span>
-              </div>
-            ))}
-            {events.length === 0 && <div className="empty">Waiting for events...</div>}
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Kanban Board - 2 columns */}
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>📋 Kanban Board</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <KanbanSkeleton />
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {(["queued", "assigned", "running", "completed"] as const).map((col) => (
+                        <div key={col} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">{col}</h3>
+                            <Badge variant="secondary">{columns[col].length}</Badge>
+                          </div>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {columns[col].slice(0, 5).map((task) => (
+                              <div key={task.id} className="bg-[var(--bg-elevated)] rounded-lg p-3 border border-[var(--border-subtle)]">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-[var(--text-primary)] truncate">{task.title}</span>
+                                  <span className="text-xs text-[var(--text-tertiary)]">P{task.priority}</span>
+                                </div>
+                                {task.assignedAgentId && (
+                                  <div className="flex items-center gap-2">
+                                    <StatusBadge status={col === "running" ? "working" : "idle"} />
+                                    <span className="text-xs text-[var(--text-secondary)]">{task.assignedAgentId.slice(0, 12)}</span>
+                                  </div>
+                                )}
+                                {task.errorMessage && (
+                                  <p className="text-xs text-[var(--accent-red)] mt-1 truncate">{task.errorMessage}</p>
+                                )}
+                              </div>
+                            ))}
+                            {columns[col].length === 0 && (
+                              <p className="text-xs text-[var(--text-tertiary)] text-center py-4">No tasks</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Agent Monitor - 1 column */}
+            <div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>🤖 Agents</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <EventSkeleton />
+                  ) : (
+                    <div className="space-y-3">
+                      {agents.map((agent) => (
+                        <div key={agent.id} className="bg-[var(--bg-elevated)] rounded-lg p-3 border border-[var(--border-subtle)]">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">{agent.name}</span>
+                            <StatusBadge status={agent.status as any} />
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                            <span>{agent.totalCompleted} done</span>
+                            <span>·</span>
+                            <span>{agent.totalFailed} failed</span>
+                          </div>
+                          {agent.currentTaskId && (
+                            <p className="text-xs text-[var(--text-tertiary)] mt-1 truncate">Working on: {agent.currentTaskId.slice(0, 16)}</p>
+                          )}
+                        </div>
+                      ))}
+                      {agents.length === 0 && (
+                        <p className="text-xs text-[var(--text-tertiary)] text-center py-4">No agents registered</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </section>
-      </div>
 
-      {/* Agent Monitor */}
-      <section className="agent-monitor">
-        <h2>🤖 Agent Monitor</h2>
-        <div className="agent-grid">
-          {health?.modules.orchestrator.agents && (
-            <div className="agent-card">
-              <div className="agent-name">Orchestrator</div>
-              <div className="agent-status">
-                Total: {health.modules.orchestrator.agents.total} |
-                Idle: {health.modules.orchestrator.agents.idle} |
-                Working: {health.modules.orchestrator.agents.working} |
-                Error: {health.modules.orchestrator.agents.error}
-              </div>
-            </div>
-          )}
+          {/* Bottom Panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* System Health */}
+            <Card>
+              <CardHeader>
+                <CardTitle>💻 System Health</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <EventSkeleton />
+                ) : systemHealth ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-secondary)]">CPU</span>
+                      <span>{systemHealth.cpu.usage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-[var(--bg-elevated)] rounded-full h-2">
+                      <div className="bg-[var(--accent-blue)] h-2 rounded-full" style={{ width: `${systemHealth.cpu.usage}%` }} />
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-secondary)]">Memory</span>
+                      <span>{systemHealth.memory.usagePercent.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-[var(--bg-elevated)] rounded-full h-2">
+                      <div className="bg-[var(--accent-purple)] h-2 rounded-full" style={{ width: `${systemHealth.memory.usagePercent}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
+                      <span>Uptime: {Math.floor(systemHealth.uptime / 3600)}h</span>
+                      <span>{systemHealth.platform}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-tertiary)]">No system data</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Live Events */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📡 Events</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <EventSkeleton />
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {events.slice(0, 10).map((event) => (
+                      <div key={event.id} className="flex items-center gap-2 text-xs">
+                        <span className="font-mono text-[var(--text-tertiary)] w-16">{new Date(event.timestamp).toLocaleTimeString()}</span>
+                        <Badge variant={event.type.includes('error') ? 'destructive' : 'secondary'} className="text-[10px]">{event.type}</Badge>
+                      </div>
+                    ))}
+                    {events.length === 0 && (
+                      <p className="text-xs text-[var(--text-tertiary)] text-center py-4">No events</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Notifications */}
+            <Card>
+              <CardHeader>
+                <CardTitle>🔔 Alerts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <EventSkeleton />
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {notifications.length > 0 ? notifications.slice(0, 5).map((notif) => (
+                      <div key={notif.id} className="flex items-center gap-2 text-xs">
+                        <span className={notif.severity === 'error' ? 'text-[var(--accent-red)]' : 'text-[var(--accent-yellow)]'}>●</span>
+                        <span className="text-[var(--text-secondary)] truncate">{notif.message}</span>
+                      </div>
+                    )) : (
+                      <div className="text-center py-4">
+                        <p className="text-sm text-[var(--accent-green)]">✓ All clear</p>
+                        <p className="text-xs text-[var(--text-tertiary)]">No alerts</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </section>
+      </MainContent>
     </div>
   );
 }

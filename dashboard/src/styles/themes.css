@@ -1,0 +1,27 @@
+/* Theme — Hermes AI OS Dashboard */
+
+/* Dark Theme (Default) */
+.dark {
+  --bg-base: #0F0F12;
+  --bg-surface: #16161A;
+  --bg-elevated: #1E1E24;
+  --bg-overlay: #25252D;
+  --text-primary: #EDEDEF;
+  --text-secondary: #8B8B8F;
+  --text-tertiary: #5C5C60;
+  --border-subtle: #2A2A32;
+  --border-focus: #3B82F6;
+}
+
+/* Light Theme */
+.light {
+  --bg-base: #FFFFFF;
+  --bg-surface: #F8F9FA;
+  --bg-elevated: #F1F3F5;
+  --bg-overlay: #E9ECEF;
+  --text-primary: #212529;
+  --text-secondary: #6C757D;
+  --text-tertiary: #ADB5BD;
+  --border-subtle: #DEE2E6;
+  --border-focus: #3B82F6;
+}

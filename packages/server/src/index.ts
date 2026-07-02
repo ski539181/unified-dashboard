@@ -13,6 +13,7 @@ import { LearningLoop } from './modules/learning/learning-loop';
 import { SelfImprovement } from './modules/learning/self-improvement';
 import { createApiRouter } from './api/router';
 import { createIntelligenceRouter } from './api/intelligence-router';
+import { createDashboardRouter } from './api/dashboard-router';
 import { SelfHealer } from './modules/healing';
 import {
   DatabaseManager,
@@ -205,6 +206,7 @@ async function main() {
     selfImprovement,
     eventBus
   ));
+  app.use('/api/dashboard', createDashboardRouter(orchestrator, eventBus, eventStore));
 
   // Health check
   app.get('/health', (req, res) => {
