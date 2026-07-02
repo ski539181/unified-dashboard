@@ -7,6 +7,7 @@ import { OverviewPanel } from './components/OverviewPanel';
 import { KanbanBoard } from './components/KanbanBoard';
 import { AgentPanel } from './components/AgentPanel';
 import { EventStream } from './components/EventStream';
+import { TokenSlimPanel } from './components/TokenSlimPanel';
 
 function App() {
   const { setTasks, setAgents, setStats, addEvent } = useDashboardStore();
@@ -42,9 +43,13 @@ function App() {
           <ConnectionStatus />
         </div>
       </header>
-
       {/* Main Content */}
       <main className="p-6">
+        {/* TokenSlim Pipeline - Full Width */}
+        <div className="mb-6">
+          <TokenSlimPanel />
+        </div>
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left Column - Overview + Kanban */}
           <div className="xl:col-span-2 space-y-6">

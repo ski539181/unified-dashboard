@@ -55,4 +55,10 @@ export const api = {
     const res = await fetch('/health');
     return res.json();
   },
+
+  // TokenSlim stats
+  async getTokenSlimStats(): Promise<any> {
+    const res = await fetch(`${API_BASE}/tokenslim`);
+    return res.json();
+  },
 };
